@@ -1,5 +1,22 @@
 from fpdf import FPDF
 
+UNICODE_REPLACEMENTS = {
+    "–": "-",  # en dash
+    "—": "-",  # em dash
+    "‘": "'",  # left single quote
+    "’": "'",  # right single quote
+    "“": '"',  # left double quote
+    "”": '"',  # right double quote
+    "•": "-",  # bullet
+    "…": "...",  # ellipsis
+}
+
+
+def _sanitize(text):
+    for char, replacement in UNICODE_REPLACEMENTS.items():
+        text = text.replace(char, replacement)
+    return text
+
 
 class _BasePDF(FPDF):
     def __init__(self):
@@ -13,7 +30,7 @@ class _BasePDF(FPDF):
 def render_cover_letter_pdf(text, output_path):
     pdf = _BasePDF()
     pdf.set_font("Helvetica", size=11)
-    for line in text.split("\n"):
+    for line in _sanitize(text).split("\n"):
         if line.strip() == "":
             pdf.ln(6)
         else:
@@ -23,7 +40,7 @@ def render_cover_letter_pdf(text, output_path):
 
 def render_resume_pdf(markdown_text, output_path):
     pdf = _BasePDF()
-    for line in markdown_text.split("\n"):
+    for line in _sanitize(markdown_text).split("\n"):
         stripped = line.strip()
         if not stripped:
             pdf.ln(4)
