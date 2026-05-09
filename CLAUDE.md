@@ -3,124 +3,193 @@
 ## What this is
 Automated daily job scraping pipeline for Nathan Vuong's job search.
 Triggers via Claude Code Routine on a cron schedule (5 PM PST daily).
-Discovers, scrapes, scores, and posts curated job listings to Discord.
+Discovers, scrapes, scores, generates tailored cover letters and resume tweaks,
+renders PDFs, and posts everything to Discord.
 
 ## Candidate Profile
 
-**Name:** Nathan Vuong  
-**Location:** Irvine, CA (targeting SF, NYC, Remote roles)  
+**Name:** Nathan Vuong
+**Location:** Irvine, CA (targeting SF, NYC, Remote roles)
 **Background:**
 - 3 years PwC Cloud & Digital Consulting (Workday Financials, Fortune 500 clients)
-  - Cross-functional alignment, stakeholder management, VOC research, requirements → systems
+  - Cross-functional alignment, stakeholder management, VOC research, requirements-to-systems
 - Co-Founder, Aiso Pickleball ($100K revenue)
   - Product development, DTC brand, SEO, web attribution, conversion optimization, influencer marketing
-- Founder, Xpress Distribution ($175K ticket arbitrage, sneaker resale, 40-user inventory system)
+- Founder, Xpress Distribution ($175K revenue, 53% ROI, 40-user inventory system)
   - Demand evaluation, automation, proxy infrastructure, Python tooling
 - Technical: Python, SQL, HTML/CSS/JS, Figma, Jira, REST APIs, Claude Code
+- Education: UCSB Economics & Accounting, 3.95 GPA, AWS Cloud Practitioner
 
 **Target Roles (priority order):**
-1. Growth (Growth Associate, Growth Analyst, Growth Manager, Growth PM, Head of Growth)
-2. Product (PM, Associate PM, Founding PM, Product Growth, Product Operations)
-3. Strategy & Ops (Biz Ops, Strategy & Ops, RevOps, GTM Ops, Chief of Staff)
-4. Adjacent (Partnerships, GTM, Product Marketing with growth component)
+1. Growth: Growth Manager, Growth Associate, Growth Analyst, Growth Lead, Growth PM,
+   Growth Product Manager, Growth Marketing Manager, Head of Growth, Lifecycle Marketing Manager
+2. Product: Product Manager, Associate PM, Founding PM, First PM, Product Lead,
+   Product Growth Manager, Product Operations Manager
+3. Strategy & Ops: Chief of Staff (seed/Series A), Strategy & Operations,
+   Business Operations, RevOps, GTM Operations, Strategic Initiatives
+4. Adjacent: Partnerships Manager, Business Development, Product Marketing Manager,
+   Marketplace Manager, GTM Manager, Solutions Manager, Community Manager
 
 **Target companies:** Seed through Series B startups, YC-backed preferred. Open to larger
-tech companies for direct Growth/Product roles.
+tech companies for direct Growth/Product roles. **Healthcare and insurance excluded.**
 
 **Target locations:** San Francisco, New York City, Remote
 
 ## Architecture
 
-### Discovery Layer — Brave Search API
+Six-layer pipeline split between Python (data collection, PDF rendering, Discord posting)
+and Claude Code Routine (scoring, fit analysis, cover letter generation, resume tailoring).
+
+```
+Claude Code Routine triggers daily at 5 PM PST
+|
+|- 1. DISCOVER  (Python)  -- Brave Search API finds job board URLs
+|- 2. EXTRACT   (Python)  -- HTTP scrapes 12 sources
+|- 3. SCORE     (Claude)  -- Reads scraped jobs + resume, scores 1-10
+|- 4. TAILOR    (Claude)  -- For 7+: cover letter + resume tweak
+|- 5. RENDER    (Python)  -- Converts materials to PDF
+|- 6. POST      (Python)  -- Discord embeds + threads with PDF attachments
+```
+
+### Layer 1: Discovery — Brave Search API
 - Dynamically discovers companies and job board URLs
 - Queries structured around role titles + startup signals
 - Returns Greenhouse/Lever/Ashby URLs for extraction layer
-- Also surfaces Wellfound, Lenny's, and other boards via index
-- API key stored in .env as BRAVE_API_KEY
+- Brave API free tier = 2,000 queries/month, budgeted at ~30 queries/run
 
-### Extraction Layer — Direct HTTP
-- Hits discovered Greenhouse/Lever/Ashby board URLs directly
-- Also hits known public APIs: RemoteOK, Himalayas, Built In SF/NYC
-- No browser, no Playwright — pure requests + BeautifulSoup/JSON parsing
-- Deduplicates by URL across all sources within a run
+### Layer 2: Extraction — Direct HTTP (12 sources)
+| Source | Method | Tier |
+|--------|--------|------|
+| Greenhouse | JSON API | 1 |
+| Lever | JSON API | 1 |
+| Ashby | JSON API | 1 |
+| YC Work at a Startup | HTML scrape | 1 |
+| startups.gallery | HTML scrape | 1 |
+| RemoteOK | JSON API | 2 |
+| Himalayas | JSON API | 2 |
+| Built In SF/NYC | HTML scrape | 2 |
+| HN Who is Hiring | HN API | 3 |
+| Wellfound | Via Brave index | 3 |
+| Lenny's Job Board | Via Brave index | 3 |
+| Reforge Job Board | Via Brave index | 3 |
 
-### Scoring Layer
-- Scores each listing 1-10 against candidate profile (see scoring.py)
-- Posts only listings scoring 6+ to Discord
-- Max 20 posts per run (top by score)
+No browser, no Playwright — pure requests + BeautifulSoup/JSON parsing.
+Deduplicates by URL across all sources within a run.
 
-### Output Layer — Discord Webhook
-- Webhook URL stored in .env as DISCORD_WEBHOOK_URL
-- Rich embed format per listing (see discord_poster.py)
-- Batch posts up to 10 embeds per request
-- Posts a "no matches" summary if zero listings score 6+
+### Layer 3: Scoring — Claude Code Routine
+Scores each listing 1-10 using 6 weighted dimensions (see routine_prompt.md):
+- Role-profile match (30%) — does the JD map to Nathan's actual experience?
+- Seniority fit (20%) — 5+ yr PM title = lower, scrappy signals = boost
+- Company stage (15%) — seed-Series B highest, enterprise OK if product/growth, healthcare/insurance excluded
+- Scrappiness signal (10%) — JD mentions builder/founding/0-to-1
+- Location match (15%) — SF, NYC, Remote = full
+- Growth signal density (10%) — experimentation, metrics, PLG, GTM
+
+Actions: 7+ = full cover letter + resume tweak. 5-6 = fit summary only. 1-4 = excluded.
+
+### Layer 4: Tailoring — Claude Code Routine
+Cover letters: Harvard framework + Google XYZ method, Nathan's direct voice.
+Resume tweaks: Reorder bullets + max 3-5 word-level vocabulary mirrors.
+See routine_prompt.md for full rules, voice constraints, and anti-AI-detection patterns.
+
+### Layer 5: Rendering — PDF Generation
+fpdf2 converts cover letters and tweaked resumes to clean PDFs.
+Unicode characters sanitized to latin-1 (en dashes, smart quotes, bullets).
+
+### Layer 6: Output — Discord Bot
+Discord bot token (not webhook) for thread creation + PDF attachments.
+- Daily summary embed with source stats and error reporting
+- Per-job embeds (7+) with thread auto-replies containing cover_letter.pdf + resume.pdf
+- Compact list for 5-6 scored jobs
+- No-matches fallback with near-miss info
 
 ## File Structure
 ```
 jarvis/
-├── CLAUDE.md              ← You are here
-├── README.md
-├── .env                   ← API keys (never commit)
-├── .env.example           ← Committed template
+├── CLAUDE.md                  ← Architecture context for Claude Code sessions
+├── resume_base.md             ← Nathan's structured resume (source of truth)
+├── routine_prompt.md          ← Instructions for Claude Code Routine (scoring + tailoring)
+├── .env                       ← API keys (never commit)
+├── .env.example
 ├── .gitignore
 ├── requirements.txt
-├── main.py                ← Entry point, orchestrates full pipeline
-├── config.py              ← Role targets, scoring weights, search queries
+├── main.py                    ← Scraping orchestrator (discovery + extraction + dedup)
+├── post_results.py            ← Post-scoring pipeline (PDF render + Discord post)
+├── config.py                  ← Role targets, search queries, source URLs, thresholds
 ├── scraper/
-│   ├── __init__.py
-│   ├── brave_search.py    ← Brave Search API discovery
-│   ├── greenhouse.py      ← Direct HTTP extraction for Greenhouse boards
-│   ├── lever.py           ← Direct HTTP extraction for Lever boards
-│   ├── remoteok.py        ← RemoteOK public JSON API
-│   ├── himalayas.py       ← Himalayas HTTP scrape
-│   └── builtin.py         ← Built In SF/NYC HTTP scrape
-├── scorer/
-│   ├── __init__.py
-│   └── scoring.py         ← Scoring logic against candidate profile
+│   ├── brave_search.py        ← Brave Search API discovery
+│   ├── greenhouse.py          ← Greenhouse JSON API
+│   ├── lever.py               ← Lever JSON API
+│   ├── ashby.py               ← Ashby JSON API
+│   ├── yc_startup.py          ← YC Work at a Startup scraper
+│   ├── startups_gallery.py    ← startups.gallery scraper
+│   ├── remoteok.py            ← RemoteOK public JSON API
+│   ├── himalayas.py           ← Himalayas scraper
+│   ├── builtin.py             ← Built In SF/NYC scraper
+│   └── hn_hiring.py           ← HN "Who is Hiring" thread parser
+├── tailor/
+│   └── templates.py           ← Scoring dimensions, voice rules, cover letter constraints
+├── renderer/
+│   └── pdf_builder.py         ← Markdown-to-PDF for cover letters and resumes
 ├── poster/
-│   ├── __init__.py
-│   └── discord_poster.py  ← Discord webhook formatting and posting
+│   └── discord_poster.py      ← Discord bot posting with threads + file attachments
 ├── utils/
-│   ├── __init__.py
-│   ├── deduper.py         ← URL deduplication within a run
-│   └── logger.py          ← Structured logging
+│   ├── deduper.py             ← URL deduplication within a run
+│   └── logger.py              ← Structured logging
+├── data/                      ← Runtime data (gitignored)
+│   ├── scraped_jobs.json      ← Raw scrape output
+│   ├── scored_jobs.json       ← Claude's scored + analyzed output
+│   └── pdfs/                  ← Generated PDFs per job
 └── tests/
+    ├── test_utils.py
     ├── test_brave.py
-    ├── test_scoring.py
+    ├── test_ats.py
+    ├── test_public_apis.py
+    ├── test_specialty.py
+    ├── test_renderer.py
     └── test_discord.py
 ```
 
 ## Environment Variables
 ```
-BRAVE_API_KEY=           # Brave Search API key
-DISCORD_WEBHOOK_URL=     # Discord webhook for job postings
+BRAVE_API_KEY=           # Brave Search API (free tier, 2000 queries/month)
+DISCORD_BOT_TOKEN=       # Discord bot token
+DISCORD_CHANNEL_ID=      # Target channel ID for job postings
 ```
 
 ## Key Decisions & Constraints
 - No Playwright or browser automation — cloud Routine has no browser
 - No LinkedIn scraping — IP rate limiting risk on cloud infrastructure
-- Wellfound excluded from direct scraping — auth walls. Covered partially via Brave index
-- Brave API free tier = 2,000 queries/month. Budget ~60/day across all queries
+- No separate Claude API key — Routine does AI work using subscription
+- Wellfound excluded from direct scraping — auth walls. Covered via Brave index
+- Healthcare and insurance companies excluded entirely from scoring
+- Brave API free tier = 2,000 queries/month. Budget ~30 queries per run
 - Target runtime under 3 minutes per full pipeline run
-- All errors should be caught per-source; one source failing must not abort the pipeline
-- Log errors to Discord footer so failures are visible without checking logs manually
-
-## Scoring Criteria (summary — see scorer/scoring.py for full logic)
-HIGH (7-10): Seed/Series A/B startup, founding PM or first PM, growth experiments/metrics
-ownership, biz ops/strategy at startup, generalist PM, YC-backed, SF/NYC/Remote,
-no strict 3+ yr PM title requirement
-LOW (1-4): Enterprise, 5+ yr PM title required, deep technical PM, irrelevant domain
+- All errors caught per-source; one source failing must not abort pipeline
+- Errors reported in Discord summary footer
+- Cover letters follow Harvard framework + Google XYZ method
+- Resume tweaks limited to reorder + max 5 word-level vocabulary mirrors
+- Anti-AI-detection: no participle phrases, no filler enthusiasm, Nathan's direct voice
+- Discord uses bot token for thread creation (not webhook)
 
 ## Running Locally
 ```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # fill in keys
-python main.py
+python main.py         # runs scraping only
+# Then Claude scores + tailors, writing scored_jobs.json
+python post_results.py # renders PDFs and posts to Discord
 ```
 
-## Routine Trigger (Claude Code Cloud)
-- Schedule: 0 17 * * * PST (= 0 1 * * * UTC)
-- Entry point: python main.py
+## Routine Execution Flow
+1. Routine triggers at 5 PM PST (0 1 * * * UTC)
+2. Runs `python main.py` (scraping -> data/scraped_jobs.json)
+3. Claude reads routine_prompt.md, scraped_jobs.json, resume_base.md
+4. Claude scores, writes fit analysis, generates cover letters, tweaks resumes
+5. Claude writes data/scored_jobs.json
+6. Runs `python post_results.py` (PDFs + Discord posting)
 
 
 <claude-mem-context>
