@@ -1,0 +1,8 @@
+.env
+data/scraped_jobs.json
+data/scored_jobs.json
+data/pdfs/
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
