@@ -6,6 +6,7 @@ load_dotenv()
 BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID")
+DREAMWORK_API_KEY = os.getenv("DREAMWORK_API_KEY")
 
 SCORE_THRESHOLD_FULL = 7
 SCORE_THRESHOLD_MENTION = 5
@@ -84,7 +85,33 @@ BRAVE_SEARCH_QUERIES = [
     '"{title}" startup job board SF NYC',
 ]
 
+BRAVE_LINKEDIN_QUERIES = [
+    'site:linkedin.com/jobs/view "{title}" startup',
+    'site:linkedin.com/jobs/view "{title}" remote 2026',
+]
+
 SCRAPE_TIMEOUT = 30
+
+import re
+
+_TARGET_PATTERNS = []
+for titles in ROLE_TITLES.values():
+    for t in titles:
+        _TARGET_PATTERNS.append(re.compile(r"\b" + re.escape(t) + r"\b", re.IGNORECASE))
+
+_EXCLUDE_ROLE_WORDS = re.compile(
+    r"\b(sales development rep|business development rep|"
+    r"software engineer|software developer|"
+    r"engineer|developer|designer|recruiter|accountant|bookkeeper|"
+    r"nurse|therapist|physician|sdr|bdr)\b", re.IGNORECASE
+)
+
+
+def title_matches_target(job_title):
+    for pattern in _TARGET_PATTERNS:
+        if pattern.search(job_title):
+            return True
+    return False
 PIPELINE_SOURCES = [
     "brave_search",
     "greenhouse",

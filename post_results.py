@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from config import DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, SCORE_THRESHOLD_FULL, SCORE_THRESHOLD_MENTION
-from renderer.pdf_builder import render_cover_letter_pdf, render_resume_pdf
+from renderer.pdf_builder import render_cover_letter_pdf
 from poster.discord_poster import DiscordPoster
 from utils.logger import get_logger
 
@@ -61,18 +61,13 @@ def run():
 
     for job in top_jobs[:20]:
         cover_pdf = None
-        resume_pdf = None
         safe_name = f"{job['company']}_{job['title']}".replace(" ", "_").replace("/", "-")[:50]
 
         if job.get("cover_letter"):
             cover_pdf = str(PDF_DIR / f"cover_{safe_name}.pdf")
             render_cover_letter_pdf(job["cover_letter"], cover_pdf)
 
-        if job.get("tweaked_resume"):
-            resume_pdf = str(PDF_DIR / f"resume_{safe_name}.pdf")
-            render_resume_pdf(job["tweaked_resume"], resume_pdf)
-
-        poster.post_job(job, cover_letter_pdf=cover_pdf, resume_pdf=resume_pdf)
+        poster.post_job(job, cover_letter_pdf=cover_pdf)
         time.sleep(1.5)
 
     if mention_jobs:

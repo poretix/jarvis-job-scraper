@@ -6,7 +6,10 @@ from pathlib import Path
 from config import (
     BRAVE_API_KEY,
     BRAVE_SEARCH_QUERIES,
+    BRAVE_LINKEDIN_QUERIES,
+    DREAMWORK_API_KEY,
     ROLE_TITLES,
+    title_matches_target,
 )
 from scraper.brave_search import BraveSearchScraper
 from scraper.greenhouse import GreenhouseScraper
@@ -18,6 +21,7 @@ from scraper.builtin import BuiltInScraper
 from scraper.hn_hiring import HNHiringScraper
 from scraper.yc_startup import YCStartupScraper
 from scraper.startups_gallery import StartupsGalleryScraper
+from scraper.dreamwork import DreamworkScraper
 from utils.deduper import Deduper
 from utils.logger import get_logger
 
@@ -29,7 +33,7 @@ def run_discovery():
     """Use Brave Search to discover ATS board URLs."""
     if not BRAVE_API_KEY:
         log.warning("No BRAVE_API_KEY — skipping discovery")
-        return []
+        return [], []
 
     brave = BraveSearchScraper(api_key=BRAVE_API_KEY)
     discovered = []
@@ -46,7 +50,20 @@ def run_discovery():
             time.sleep(0.5)
 
     log.info(f"Discovery found {len(discovered)} ATS URLs")
-    return discovered
+
+    # LinkedIn discovery via Brave snippets
+    linkedin_jobs = []
+    linkedin_titles = ["Product Manager", "Growth Manager", "Chief of Staff",
+                       "Strategy Operations", "Business Operations"]
+    for title in linkedin_titles:
+        for query_template in BRAVE_LINKEDIN_QUERIES:
+            query = query_template.format(title=title)
+            jobs = brave.discover_linkedin(query)
+            linkedin_jobs.extend(jobs)
+            time.sleep(0.5)
+
+    log.info(f"LinkedIn via Brave: {len(linkedin_jobs)} jobs")
+    return discovered, linkedin_jobs
 
 
 def run_extraction(discovered_urls):
@@ -101,6 +118,11 @@ def run_extraction(discovered_urls):
         ("startups_gallery", lambda: StartupsGalleryScraper().extract()),
     ]
 
+    if DREAMWORK_API_KEY:
+        source_runners.append(
+            ("dreamwork", lambda: DreamworkScraper(DREAMWORK_API_KEY).extract())
+        )
+
     for name, runner in source_runners:
         try:
             jobs = runner()
@@ -110,6 +132,10 @@ def run_extraction(discovered_urls):
             errors.append(f"{name}: {e}")
             log.error(f"{name} failed: {e}")
 
+    pre_filter = len(all_jobs)
+    all_jobs = [j for j in all_jobs if title_matches_target(j.get("title", ""))]
+    log.info(f"Title filter: {pre_filter} → {len(all_jobs)} relevant jobs")
+
     return all_jobs, errors
 
 
@@ -118,8 +144,9 @@ def run_scrape():
     DATA_DIR.mkdir(exist_ok=True)
 
     start = time.time()
-    discovered = run_discovery()
+    discovered, linkedin_jobs = run_discovery()
     all_jobs, errors = run_extraction(discovered)
+    all_jobs.extend(linkedin_jobs)
 
     deduper = Deduper()
     unique_jobs = deduper.deduplicate(all_jobs)

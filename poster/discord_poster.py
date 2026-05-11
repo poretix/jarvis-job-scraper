@@ -38,7 +38,7 @@ class DiscordPoster:
 
         self._send_message({"embeds": [embed]})
 
-    def post_job(self, job, cover_letter_pdf=None, resume_pdf=None):
+    def post_job(self, job, cover_letter_pdf=None):
         score = job["score"]
         color = 0x57F287 if score >= 9 else 0xFEE75C if score >= 7 else 0x99AAB5
 
@@ -67,8 +67,10 @@ class DiscordPoster:
         thread_id = thread.get("id")
         if cover_letter_pdf and os.path.exists(cover_letter_pdf):
             self._upload_file(thread_id, cover_letter_pdf, "cover_letter.pdf")
-        if resume_pdf and os.path.exists(resume_pdf):
-            self._upload_file(thread_id, resume_pdf, "resume.pdf")
+
+        resume_tweaks = job.get("resume_tweaks")
+        if resume_tweaks:
+            self._post_resume_tweaks(thread_id, resume_tweaks)
 
     def post_compact_list(self, jobs):
         lines = []
@@ -92,6 +94,36 @@ class DiscordPoster:
             desc += f"\nTop near-miss: {near_miss['title']} @ {near_miss['company']} ({near_miss['score']}/10)"
         embed = {"title": "No Matches", "description": desc, "color": 0xED4245}
         self._send_message({"embeds": [embed]})
+
+    def _post_resume_tweaks(self, thread_id, tweaks):
+        lines = ["**Resume Tweaks for This Role:**\n"]
+        for tweak in tweaks:
+            section = tweak.get("section", "")
+            lines.append(f"__**{section}**__")
+            lines.append(f"Find:\n```{tweak['original']}```")
+            lines.append(f"Replace with:\n```{tweak['replacement']}```")
+            lines.append("")
+
+        text = "\n".join(lines)
+        if len(text) > 1900:
+            chunks = [text[i:i+1900] for i in range(0, len(text), 1900)]
+            for chunk in chunks:
+                self._send_thread_message(thread_id, chunk)
+        else:
+            self._send_thread_message(thread_id, text)
+
+    def _send_thread_message(self, thread_id, content):
+        try:
+            resp = requests.post(
+                f"{BASE_URL}/channels/{thread_id}/messages",
+                headers={**self.headers, "Content-Type": "application/json"},
+                json={"content": content},
+                timeout=10,
+            )
+            if resp.status_code not in (200, 201):
+                log.error(f"Thread message failed: {resp.status_code}")
+        except Exception as e:
+            log.error(f"Thread message error: {e}")
 
     def _send_message(self, payload):
         try:

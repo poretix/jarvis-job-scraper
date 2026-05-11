@@ -26,7 +26,13 @@ Write `data/scored_jobs.json` with this structure:
       "score": 9,
       "fit_analysis": "2-3 sentence analysis",
       "cover_letter": "Full cover letter text (for 7+ only)",
-      "tweaked_resume": "Full tweaked resume markdown (for 7+ only)"
+      "resume_tweaks": [
+        {
+          "section": "Aiso Pickleball",
+          "original": "full original bullet from resume_base.md",
+          "replacement": "full replacement bullet with JD vocabulary mirrored"
+        }
+      ]
     }
   ]
 }
@@ -104,26 +110,35 @@ Example:
 
 ## Resume Tailoring (for jobs scoring 7+)
 
-Read `resume_base.md` and produce a modified version.
+Read `resume_base.md` and produce a structured list of bullet swaps — NOT a full resume.
+Nathan keeps a master formatted resume and will copy-paste your suggested changes.
 
-**Step 1 — Reorder bullets (zero detection risk):**
-- Within each job, put the most JD-relevant bullets first
-- If JD emphasizes growth/marketing: lead with Aiso's SEO/attribution bullets
-- If JD emphasizes cross-functional/ops: lead with PwC's stakeholder alignment bullets
-- Section order stays the same (most recent first)
+**Output format — `resume_tweaks` array:**
+Each entry is one bullet change. Provide the FULL original bullet and the FULL replacement bullet so Nathan can copy-paste directly.
+```json
+{
+  "section": "Aiso Pickleball",
+  "original": "Developed a direct to consumer brand through SEO, web attribution analysis, automated conversion workflows, and post purchase surveys to optimize acquisition channels and inform iterative product improvements",
+  "replacement": "Developed a direct to consumer brand through growth experiments including SEO, web attribution analysis, and conversion optimization to optimize acquisition channels and inform iterative product improvements"
+}
+```
 
-**Step 2 — Light vocabulary mirroring (max 3-5 word-level changes across entire resume):**
+- `section`: the company/section name exactly as it appears in resume_base.md
+- `original`: the FULL bullet text from resume_base.md (exact match)
+- `replacement`: the FULL revised bullet with vocabulary mirroring applied
+
+**Rules for vocabulary mirroring (max 3-5 changes across entire resume):**
 - Identify key JD terms that Nathan's bullets already cover with different words
-- Swap only where natural:
-  - "SEO, web attribution" could become "customer acquisition through SEO and web attribution" (if JD says "customer acquisition")
-  - "automated conversion workflows" could become "growth experiments including automated conversion workflows" (if JD says "growth experiments")
+- Swap only where natural — change a few words, not the structure
+- Each entry = one bullet swap. Only include bullets that actually change.
 
 **Hard rules:**
 - Never change facts, numbers, dates, titles, or company names
 - Never add claims Nathan can't verify in an interview
 - Never add skills not on the resume
 - Keep XYZ structure intact
-- Maximum 5 word-level changes total
+- Maximum 5 bullet changes total across the entire resume
+- Only include bullets that need changes — skip everything else
 
 ## Execution Flow
 
