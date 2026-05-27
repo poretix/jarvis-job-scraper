@@ -1,9 +1,15 @@
+import itertools
+
 from prescorer import prescore_jobs
+
+_url_counter = itertools.count()
 
 
 def _job(title="Product Manager", company="StartupX", location="NYC",
-         description="a startup building tools", url="http://example.com",
+         description="a startup building tools", url=None,
          source="greenhouse"):
+    if url is None:
+        url = f"http://example.com/{next(_url_counter)}"
     return {
         "title": title,
         "company": company,
@@ -343,6 +349,40 @@ def test_negative_signals_capped_at_minus_4():
     # Title match = 3, no location/signals, negatives capped at -4 => score >= -1
     # The score should not go absurdly negative
     assert result[0]["prescore"] >= -1
+
+
+# --- LinkedIn-via-Brave boost ---
+
+def test_guaranteed_pass_linkedin_with_title_match():
+    """LinkedIn-via-Brave jobs with title match always pass through,
+    even if their keyword score is too low to compete with rich ATS descriptions."""
+    filler = [
+        _job(title="Analyst", company=f"Filler{i}", location="San Francisco",
+             description="growth experimentation PLG GTM conversion funnel metrics "
+                         "roadmap OKRs MVP founding startup seed 0-to-1 "
+                         "strategic planning P&L forecasting playbook scaling")
+        for i in range(35)
+    ]
+    sparse_linkedin = _job(
+        title="Chief of Staff", company="SparseCo",
+        location="", source="linkedin_via_brave",
+        description="short snippet about a startup role",
+    )
+    all_jobs = filler + [sparse_linkedin]
+    result = prescore_jobs(all_jobs, max_results=30)
+    companies = [j["company"] for j in result]
+    assert "SparseCo" in companies
+
+
+def test_linkedin_via_brave_gets_boost():
+    jobs = [
+        _job(company="A", source="linkedin_via_brave", description="short snippet"),
+        _job(company="B", source="greenhouse", description="short snippet"),
+    ]
+    result = prescore_jobs(jobs)
+    a = next(j for j in result if j["company"] == "A")
+    b = next(j for j in result if j["company"] == "B")
+    assert a["prescore"] - b["prescore"] == 2
 
 
 # --- Sorting ---

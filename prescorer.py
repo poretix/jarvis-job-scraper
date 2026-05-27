@@ -9,7 +9,8 @@ from config import EXCLUDED_INDUSTRIES, title_matches_target
 # --- Constants ---
 
 DESC_TRUNCATE = 2000
-DEFAULT_MAX = 30
+DEFAULT_MAX = 50
+LINKEDIN_GUARANTEED_CAP = 15
 
 # --- Location matching (+3, cap 3) ---
 
@@ -175,13 +176,24 @@ def prescore_jobs(jobs, max_results=DEFAULT_MAX):
             continue
 
         score = 0
+        source = job.get("source", "")
 
-        # Location match (+3, cap 3)
-        if _LOC_PATTERN.search(location):
+        # LinkedIn-via-Brave boost: these jobs have tiny snippet descriptions
+        # (~300 chars vs ~6,000 for ATS sources), starving keyword scoring.
+        # They already passed Brave search relevance to get found, so baseline +2.
+        if source == "linkedin_via_brave":
+            score += 2
+
+        # Location match (+3, cap 3) — also check title for LinkedIn jobs with empty location
+        loc_match = bool(_LOC_PATTERN.search(location)) or (
+            not location and _LOC_PATTERN.search(title)
+        )
+        if loc_match:
             score += 3
 
         # Title match (+3, cap 3)
-        if title_matches_target(title):
+        title_match = title_matches_target(title)
+        if title_match:
             score += 3
 
         # Growth signals (+1 each, cap 4)
@@ -207,14 +219,44 @@ def prescore_jobs(jobs, max_results=DEFAULT_MAX):
             "company": company,
             "location": location,
             "url": job.get("url", ""),
-            "source": job.get("source", ""),
+            "source": source,
             "description": desc[:DESC_TRUNCATE],
             "prescore": score,
+            "_title_match": title_match,
+            "_loc_match": loc_match,
         }
         scored.append(entry)
 
+    # Sort all by score
     scored.sort(key=lambda x: x["prescore"], reverse=True)
-    return scored[:max_results]
+
+    # Guaranteed pass: LinkedIn-via-Brave jobs with title match get priority slots.
+    # They have tiny descriptions (~300 chars) that can't compete with ATS keyword
+    # density, but they've already been search-relevance filtered by Brave.
+    linkedin_qualified = [
+        j for j in scored
+        if j["source"] == "linkedin_via_brave" and j.get("_title_match")
+    ]
+    linkedin_qualified.sort(key=lambda x: x["prescore"], reverse=True)
+    guaranteed = linkedin_qualified[:LINKEDIN_GUARANTEED_CAP]
+
+    # Fill remaining slots from top scorers
+    guaranteed_urls = {j["url"] for j in guaranteed}
+    for j in scored:
+        if len(guaranteed) >= max_results:
+            break
+        if j["url"] not in guaranteed_urls:
+            guaranteed.append(j)
+
+    result = guaranteed
+    result.sort(key=lambda x: x["prescore"], reverse=True)
+
+    # Clean internal flags
+    for j in result:
+        j.pop("_title_match", None)
+        j.pop("_loc_match", None)
+
+    return result
 
 
 def run():
