@@ -35,11 +35,13 @@ def run():
     top_jobs = [j for j in jobs if j.get("score", 0) >= SCORE_THRESHOLD_FULL]
     mention_jobs = [j for j in jobs if SCORE_THRESHOLD_MENTION <= j.get("score", 0) < SCORE_THRESHOLD_FULL]
 
-    scrape_path = DATA_DIR / "scraped_jobs.json"
     scrape_data = {}
-    if scrape_path.exists():
-        with open(scrape_path) as f:
-            scrape_data = json.load(f)
+    for fname in ["filtered_jobs.json", "scraped_jobs.json"]:
+        spath = DATA_DIR / fname
+        if spath.exists():
+            with open(spath) as f:
+                scrape_data = json.load(f)
+            break
 
     poster.post_summary(
         total_scraped=scrape_data.get("total_scraped", 0),

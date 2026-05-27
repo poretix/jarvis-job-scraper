@@ -173,3 +173,6 @@ def run_scrape():
 
 if __name__ == "__main__":
     run_scrape()
+
+    from prescorer import run as run_prescore
+    run_prescore()

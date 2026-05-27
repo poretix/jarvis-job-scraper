@@ -5,7 +5,7 @@ The scraping phase has already run. Your job: score jobs, analyze fit, generate 
 
 ## Your Inputs
 
-1. `data/scraped_jobs.json` — raw job listings from the scraping phase
+1. `data/filtered_jobs.json` — pre-filtered top ~30 job listings from the scraping phase
 2. `resume_base.md` — Nathan's base resume (source of truth)
 3. `tailor/templates.py` — constraints for cover letters, resume tweaks, and scoring
 
@@ -142,9 +142,9 @@ Each entry is one bullet change. Provide the FULL original bullet and the FULL r
 
 ## Execution Flow
 
-1. Read `data/scraped_jobs.json`
+1. Read `data/filtered_jobs.json`
 2. Read `resume_base.md`
-3. For each job in scraped_jobs:
+3. For each job in filtered_jobs:
    a. Score it 1-10
    b. If healthcare/insurance company: skip entirely
    c. If score 5+: write fit analysis
