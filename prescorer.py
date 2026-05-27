@@ -109,7 +109,6 @@ _NEGATIVE_RULES = [
     # Years of experience gates: -2 each
     (re.compile(r"\b[7-9]\+\s*years?\b", re.IGNORECASE), -2),
     (re.compile(r"\b1[0-9]\+\s*years?\b", re.IGNORECASE), -2),
-    (re.compile(r"\b15\+\s*years?\b", re.IGNORECASE), -2),
     # Degree requirements: -2 each
     (re.compile(r"computer science degree", re.IGNORECASE), -2),
     (re.compile(r"\bcs degree\b", re.IGNORECASE), -2),
